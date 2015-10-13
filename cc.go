@@ -10,6 +10,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/rakyll/globalconf"
@@ -36,6 +37,25 @@ type Campaigns struct {
 		} `json:"pagination"`
 	} `json:"meta"`
 	Campaigns []*Campaign `json:"results"`
+	Report    interface{} `json:",omitmepty"`
+}
+
+// Generates campaign report data for all of the child campaigns, then
+// creates the master report data for the complete campaign window.
+func (c *Campaigns) BuildCampaignReport() error {
+	if len(c.Campaigns) == 0 {
+		return fmt.Errorf("No campaigns to report on")
+	}
+
+	for _, campaign := range c.Campaigns {
+		_ = campaign.BuildCampaignReport()
+	}
+
+	return c.buildMegaReport()
+}
+
+func (c *Campaigns) buildMegaReport() error {
+	return nil
 }
 
 type campaignSummary struct {
@@ -82,6 +102,10 @@ type trackingAction struct {
 	BounceDate string `json:"bounce_date"`
 }
 
+func (t *trackingAction) getEmailDomain() string {
+	return strings.Split(t.Email, "@")[1]
+}
+
 type Campaign struct {
 	ID           string `json:"id"`
 	Name         string `json:"name"`
@@ -96,10 +120,48 @@ type Campaign struct {
 	Clickthroughs []click `json:"click_through_details"`
 
 	Tracking []*trackingAction `json:",omitempty"`
+
+	PivotedSummary map[string]*campaignSummary
 }
 
 func (c *Campaign) RunDateAsTime() (time.Time, error) {
 	return time.Parse(time.RFC3339, c.RunDate)
+}
+
+// Generates the following summary data.
+// - an ordered list of clickthroughs by popularity
+// - the sent -> opened -> clicked funnel (already in the TrackingSummary)
+// - a sent->opened->clicked funnel grouped by top 5 email address domains
+// - a list of unsubscribe email/uid
+// - a list of bounces
+func (c *Campaign) BuildCampaignReport() error {
+	c.PivotedSummary = map[string]*campaignSummary{}
+	for _, action := range c.Tracking {
+		domain := action.getEmailDomain()
+		if _, ok := c.PivotedSummary[domain]; !ok {
+			c.PivotedSummary[domain] = &campaignSummary{}
+		}
+
+		switch action.ActivityType {
+		case "EMAIL_SEND":
+			c.PivotedSummary[domain].Sends++
+		case "EMAIL_OPEN":
+			c.PivotedSummary[domain].Opens++
+		case "EMAIL_CLICK":
+			c.PivotedSummary[domain].Clicks++
+		case "EMAIL_BOUNCE":
+			c.PivotedSummary[domain].Bounces++
+		case "EMAIL_UNSUBSCRIBE":
+			c.PivotedSummary[domain].Unsubscribes++
+		}
+	}
+
+	for domain, summary := range c.PivotedSummary {
+		fmt.Println(domain)
+		fmt.Println(summary)
+	}
+
+	return nil
 }
 
 func getURLAndDecodeInto(url string, i interface{}) error {
@@ -233,11 +295,7 @@ func main() {
 	conf.ParseAll()
 
 	camps := load("heh.txt")
-
-	fmt.Println(camps)
-	for _, campaign := range camps.Campaigns {
-		fmt.Println(campaign)
-	}
+	camps.BuildCampaignReport()
 
 	/*
 		camps, err := getCampaigns()
