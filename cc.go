@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"html/template"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -35,7 +36,8 @@ type Tracking struct {
 }
 
 type Campaigns struct {
-	Meta struct {
+	StartDate string
+	Meta      struct {
 		Pagination struct {
 			Next string `json:"next_link"`
 		} `json:"pagination"`
@@ -58,8 +60,86 @@ func (c *Campaigns) BuildCampaignReport() error {
 	return c.buildMegaReport()
 }
 
+// send counts by domain (i.e. clicks by company)
+// click counts by domain.  / % of clicks on a per-domain basis
+// top link clicks
+// unsubscribe list (farewell~)
+// bounce list (ignoring suspended bounce reasons)
 func (c *Campaigns) buildMegaReport() error {
+	report := map[string]interface{}{}
+	report["combined"] = combineStats(c.Campaigns)
+	report["summaries"] = combineSummaries(c.Campaigns)
+	report["clicks"] = combineClicks(c.Campaigns)
+	report["unsubscribes"] = combineUnsubscribes(c.Campaigns)
+	report["bounces"] = combineBounces(c.Campaigns)
+	c.Report = report
 	return nil
+}
+
+func combineStats(c []*Campaign) *campaignSummary {
+	out := &campaignSummary{}
+	for _, campaign := range c {
+		out.Add(&campaign.TrackingSummary)
+	}
+	return out
+}
+
+func combineSummaries(c []*Campaign) SummaryList {
+	pivoted := map[string]*campaignSummary{}
+	for _, campaign := range c {
+		for _, s := range campaign.PivotedSummary {
+			if _, ok := pivoted[s.Domain]; !ok {
+				pivoted[s.Domain] = s
+				continue
+			}
+			pivoted[s.Domain].Add(s)
+		}
+	}
+	return aggTopDomains(getTopDomains, pivoted)
+}
+
+func combineClicks(c []*Campaign) ClickList {
+	links := map[string]*click{}
+	out := ClickList{}
+	for _, campaign := range c {
+		for _, click := range campaign.Clickthroughs {
+			if _, ok := links[click.ID]; !ok {
+				links[click.ID] = click
+			} else {
+				links[click.ID].Clicks += click.Clicks
+			}
+
+		}
+	}
+	for _, click := range links {
+		if click.Clicks > 0 {
+			out = append(out, click)
+		}
+	}
+	sort.Sort(out)
+	return out
+}
+
+func combineUnsubscribes(c []*Campaign) []string {
+	out := []string{}
+	for _, campaign := range c {
+		out = append(out, campaign.Unsubscribes...)
+	}
+	return out
+}
+
+func combineBounces(c []*Campaign) []string {
+	out := []string{}
+	dedup := map[string]bool{}
+	for _, campaign := range c {
+		for _, email := range campaign.Bounces {
+			if _, ok := dedup[email]; !ok {
+				out = append(out, email)
+				dedup[email] = true
+			}
+		}
+	}
+	return out
 }
 
 type campaignSummary struct {
@@ -169,6 +249,8 @@ func (c *Campaign) RunDateAsTime() (time.Time, error) {
 func (c *Campaign) BuildCampaignReport() error {
 	c.PivotedSummary = map[string]*campaignSummary{}
 
+	c.Tracking = deduplicateTracking(c.Tracking)
+
 	// Tabluating bonces, unsubs, and per-domain summaries
 	c.Bounces = []string{}
 	c.Unsubscribes = []string{}
@@ -180,10 +262,17 @@ func (c *Campaign) BuildCampaignReport() error {
 			}
 		}
 
+		if domain == "cable.comcast.com" {
+			fmt.Println(c.PivotedSummary[domain])
+		}
+
 		switch action.ActivityType {
 		case "EMAIL_SEND":
 			c.PivotedSummary[domain].Sends++
 		case "EMAIL_OPEN":
+			if domain == "cable.comcast.com" {
+				fmt.Println(action)
+			}
 			c.PivotedSummary[domain].Opens++
 		case "EMAIL_CLICK":
 			c.PivotedSummary[domain].Clicks++
@@ -205,6 +294,23 @@ func (c *Campaign) BuildCampaignReport() error {
 	return nil
 }
 
+func deduplicateTracking(t []*trackingAction) []*trackingAction {
+	out := []*trackingAction{}
+	seen := map[string]map[string]bool{}
+	for _, action := range t {
+		activity := action.ActivityType
+		user := action.ContactID
+		if _, ok := seen[activity]; !ok {
+			seen[activity] = map[string]bool{}
+		}
+		if _, ok := seen[activity][user]; !ok {
+			seen[activity][user] = true
+			out = append(out, action)
+		}
+	}
+	return out
+}
+
 // takes a map[string]campaignSummary, orders it by domain in a slice,
 // and extracts the top N versions
 func aggTopDomains(numDomains int, pivotedSummary map[string]*campaignSummary) SummaryList {
@@ -212,15 +318,19 @@ func aggTopDomains(numDomains int, pivotedSummary map[string]*campaignSummary) S
 	// the top N domains, depositing all other reports into "other..."
 
 	orderedSummaries := SummaryList{}
+	otherSummaries := &campaignSummary{
+		Domain: "other...",
+	}
 
 	for _, summary := range pivotedSummary {
+		if summary.Domain == "other..." {
+			otherSummaries.Add(summary)
+			continue
+		}
 		orderedSummaries = append(orderedSummaries, summary)
 	}
 
 	newOs := SummaryList{}
-	otherSummaries := &campaignSummary{
-		Domain: "other...",
-	}
 	sort.Sort(orderedSummaries)
 	for i, s := range orderedSummaries {
 		if i <= numDomains {
@@ -366,6 +476,23 @@ func init() {
 	flag.StringVar(&apiKey, "key", "", "API Key")
 }
 
+// generates a template
+func render(c Campaigns) string {
+	funcs := template.FuncMap{"perc": func(a, b int) int {
+		if a == 0 {
+			return 0
+		}
+		return int((float64(a) / float64(b)) * 100)
+	}}
+
+	t, _ := template.New("email").Funcs(funcs).ParseFiles("email.template")
+	fmt.Println(t)
+
+	b := bytes.NewBuffer([]byte{})
+	t.ExecuteTemplate(b, "email", c)
+	return b.String()
+}
+
 func main() {
 	// TODO: aggregate the retrieved data
 	// encode and decode the retreived data for storage using gob
@@ -382,6 +509,9 @@ func main() {
 
 	camps := load("./logs/heh.gob")
 	camps.BuildCampaignReport()
+
+	s := render(camps)
+	fmt.Println(s)
 
 	/*
 		camps, err := getCampaigns()
