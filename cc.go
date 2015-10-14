@@ -10,11 +10,15 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"sort"
 	"strings"
 	"time"
 
 	"github.com/rakyll/globalconf"
 )
+
+var getTopDomains int = 10
+var getTopClicks int = 5
 
 type apiPagination struct {
 	Prev string `json:"prev_link,omitempty"`
@@ -59,6 +63,7 @@ func (c *Campaigns) buildMegaReport() error {
 }
 
 type campaignSummary struct {
+	Domain       string
 	Sends        int `json:"sends"`
 	Opens        int `json:"opens"`
 	Clicks       int `json:"clicks"`
@@ -66,6 +71,16 @@ type campaignSummary struct {
 	Unsubscribes int `json:"unsubscribes"`
 	Bounces      int `json:"bounces"`
 	Spam_count   int `json:"spam_count"`
+}
+
+func (s *campaignSummary) Add(s2 *campaignSummary) {
+	s.Sends += s2.Sends
+	s.Opens += s2.Opens
+	s.Clicks += s2.Clicks
+	s.Forwards += s2.Forwards
+	s.Unsubscribes += s2.Unsubscribes
+	s.Bounces += s2.Bounces
+	s.Spam_count += s2.Spam_count
 }
 
 type click struct {
@@ -115,31 +130,54 @@ type Campaign struct {
 	RunDate      string `json:"last_run_date"`
 	PermalinkUrl string `json:"permalink_url"`
 
-	TrackingSummary campaignSummary `json:"tracking_summary"`
+	// Complex types from JSON response
+	TrackingSummary campaignSummary   `json:"tracking_summary"`
+	Clickthroughs   ClickList         `json:"click_through_details"`
+	Tracking        []*trackingAction `json:",omitempty"`
 
-	Clickthroughs []click `json:"click_through_details"`
-
-	Tracking []*trackingAction `json:",omitempty"`
-
-	PivotedSummary map[string]*campaignSummary
+	// Generated aggregates
+	PivotedSummary   map[string]*campaignSummary
+	Bounces          []string
+	Unsubscribes     []string
+	OrderedSummaries SummaryList
 }
+
+// Implements sort.Inteface in order to sort by summary.Sends
+type SummaryList []*campaignSummary
+
+func (s SummaryList) Len() int           { return len(s) }
+func (s SummaryList) Less(i, j int) bool { return s[i].Sends > s[j].Sends }
+func (s SummaryList) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
+
+// Implements sort.Inteface in order to sort by summary.Sends
+type ClickList []*click
+
+func (c ClickList) Len() int           { return len(c) }
+func (c ClickList) Less(i, j int) bool { return c[i].Clicks > c[j].Clicks }
+func (c ClickList) Swap(i, j int)      { c[i], c[j] = c[j], c[i] }
 
 func (c *Campaign) RunDateAsTime() (time.Time, error) {
 	return time.Parse(time.RFC3339, c.RunDate)
 }
 
 // Generates the following summary data.
-// - an ordered list of clickthroughs by popularity
-// - the sent -> opened -> clicked funnel (already in the TrackingSummary)
-// - a sent->opened->clicked funnel grouped by top 5 email address domains
-// - a list of unsubscribe email/uid
-// - a list of bounces
+// - DONE an ordered list of clickthroughs by popularity
+// - DONE the sent -> opened -> clicked funnel (already in the TrackingSummary)
+// - DONE a sent->opened->clicked funnel grouped by top 5 email address domains
+// - DONE a list of unsubscribe email/uid
+// - DONE a list of bounces
 func (c *Campaign) BuildCampaignReport() error {
 	c.PivotedSummary = map[string]*campaignSummary{}
+
+	// Tabluating bonces, unsubs, and per-domain summaries
+	c.Bounces = []string{}
+	c.Unsubscribes = []string{}
 	for _, action := range c.Tracking {
 		domain := action.getEmailDomain()
 		if _, ok := c.PivotedSummary[domain]; !ok {
-			c.PivotedSummary[domain] = &campaignSummary{}
+			c.PivotedSummary[domain] = &campaignSummary{
+				Domain: domain,
+			}
 		}
 
 		switch action.ActivityType {
@@ -151,17 +189,65 @@ func (c *Campaign) BuildCampaignReport() error {
 			c.PivotedSummary[domain].Clicks++
 		case "EMAIL_BOUNCE":
 			c.PivotedSummary[domain].Bounces++
+			c.Bounces = append(c.Bounces, action.Email)
 		case "EMAIL_UNSUBSCRIBE":
 			c.PivotedSummary[domain].Unsubscribes++
+			c.Unsubscribes = append(c.Unsubscribes, action.Email)
 		}
 	}
 
-	for domain, summary := range c.PivotedSummary {
-		fmt.Println(domain)
-		fmt.Println(summary)
-	}
+	// Generating top email domains
+	c.OrderedSummaries = aggTopDomains(getTopDomains, c.PivotedSummary)
+
+	// Generating top Clicks report
+	c.Clickthroughs = aggTopClicks(getTopClicks, c.Clickthroughs)
 
 	return nil
+}
+
+// takes a map[string]campaignSummary, orders it by domain in a slice,
+// and extracts the top N versions
+func aggTopDomains(numDomains int, pivotedSummary map[string]*campaignSummary) SummaryList {
+	// Preparing and normalizing the per-domain summary into an ordered summary and extracting
+	// the top N domains, depositing all other reports into "other..."
+
+	orderedSummaries := SummaryList{}
+
+	for _, summary := range pivotedSummary {
+		orderedSummaries = append(orderedSummaries, summary)
+	}
+
+	newOs := SummaryList{}
+	otherSummaries := &campaignSummary{
+		Domain: "other...",
+	}
+	sort.Sort(orderedSummaries)
+	for i, s := range orderedSummaries {
+		if i <= numDomains {
+			newOs = append(newOs, s)
+			fmt.Println("top domain: ", s)
+		} else {
+			otherSummaries.Add(s)
+		}
+	}
+	newOs[numDomains] = otherSummaries
+	return newOs
+}
+
+// sorts a ClickList by top clicks and outputs a new, condensed clicklist.
+// has the side effect of printing, reordering clicks list
+func aggTopClicks(numClicks int, c ClickList) ClickList {
+	newClicks := ClickList{}
+	sort.Sort(c)
+	for i, click := range c {
+		if i <= numClicks {
+			fmt.Println("top click: ", click)
+			newClicks = append(newClicks, click)
+			continue
+		}
+		break
+	}
+	return newClicks
 }
 
 func getURLAndDecodeInto(url string, i interface{}) error {
