@@ -294,7 +294,7 @@ func main() {
 	}
 	conf.ParseAll()
 
-	camps := load("heh.txt")
+	camps := load("./logs/heh.gob")
 	camps.BuildCampaignReport()
 
 	/*
@@ -315,6 +315,6 @@ func main() {
 			b, _ := json.MarshalIndent(c, "", "  ")
 			fmt.Println(string(b))
 		}
-		save(camps, "heh.txt")
+		save(camps, "./logs/heh.gob")
 	*/
 }
