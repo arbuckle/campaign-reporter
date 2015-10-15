@@ -50,10 +50,12 @@ func getURLAndDecodeInto(url string, i interface{}) error {
 
 // Retrieve all campaigns for the last 7 days
 func getCampaigns() (Campaigns, error) {
-	now := time.Now().Add(-336 * time.Hour).Format(time.RFC3339)
+	now := time.Now().Add(-time.Duration(daysBack*24) * time.Hour).Format(time.RFC3339)
 	url := fmt.Sprintf("https://api.constantcontact.com/v2/emailmarketing/campaigns?status=ALL&api_key=%s&modified_since=%s", apiKey, now)
 
-	c := &Campaigns{}
+	c := &Campaigns{
+		DaysBack: daysBack,
+	}
 	err := getURLAndDecodeInto(url, c)
 	return *c, err
 }

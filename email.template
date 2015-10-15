@@ -1,48 +1,51 @@
 {{ define "email" }}
 
-    Since {{ .StartDate }}, {{ len .Campaigns }} campaigns have been run.
-
-    {{ .Report.combined.Sends }} emails sent
-    {{ .Report.combined.Opens }} emails opened ({{ perc .Report.combined.Opens .Report.combined.Sends }}%)
-    {{ .Report.combined.Clicks }} links clicked ({{ perc .Report.combined.Clicks .Report.combined.Opens }}%)
-    {{ .Report.combined.Bounces }} email addresses bounced
-    {{ .Report.combined.Unsubscribes }} users unsubscribed
-
-
-
-
-    On the basis of our user's email address domain, we saw the following conversion rates:
-    {{ range $k, $summary := .Report.summaries }}
-    {{ if false }}
-        {{ $summary.Domain }}     {{ $summary.Sends }}  -> {{ $summary.Opens }}  -> {{ $summary.Clicks }}
-        {{ end }}{{ $summary.Domain }}     100% -> {{ perc $summary.Opens $summary.Sends }}% -> {{ perc $summary.Clicks $summary.Opens }}%{{ end }}
+============================================================
+{{ len .Campaigns }} campaign{{ if eq (len .Campaigns) 1 }} has{{ else }}s have{{ end }} been run in the past {{ .DaysBack }} days.
+============================================================
+{{ .Report.combined.Sends }} emails sent
+{{ .Report.combined.Opens }} emails opened ({{ perc .Report.combined.Opens .Report.combined.Sends }}%)
+{{ .Report.combined.Clicks }} links clicked ({{ perc .Report.combined.Clicks .Report.combined.Opens }}%)
+{{ .Report.combined.Bounces }} email addresses bounced
+{{ .Report.combined.Unsubscribes }} users unsubscribed
 
 
+============================================================
+Conversion Rates by recipient email address
+============================================================
+{{ range $k, $summary := .Report.summaries }}{{ $summary.Domain }}     {{ $summary.Sends }}  -> {{ $summary.Opens }}  -> {{ $summary.Clicks }}
+{{ $summary.Domain }}     100% -> {{ perc $summary.Opens $summary.Sends }}% -> {{ perc $summary.Clicks $summary.Opens }}%
+{{ end }}
 
-    Top links across all campaigns:
-    {{ range $i, $link := .Report.clicks }}
-        {{ $link.Clicks }} clicks - {{ $link.URL }}{{ end }}
+============================================================
+Top links across all campaigns:
+============================================================
+{{ range $i, $link := .Report.clicks }}{{ $link.Clicks }} clicks - {{ $link.URL }}
+{{ end }}
+
+============================================================
+{{ len .Report.bounces }} Bounces:
+============================================================
+{{ range $i, $email := .Report.bounces }}{{ if gt $i 0 }}, {{end}}{{ $email }}{{ end }}
 
 
-    {{ len .Report.bounces }} Bounces:
-    {{ range $i, $email := .Report.bounces }}{{ if gt $i 0 }}, {{end}}{{ $email }}{{ end }}
+============================================================
+{{ len .Report.unsubscribes }} Unsubscribes:
+============================================================
+{{ range $i, $email := .Report.unsubscribes }}{{ if gt $i 0 }}, {{end}}{{ $email }}{{ end }}
 
-    {{ len .Report.unsubscribes }} Unsubscribes:
-    {{ range $i, $email := .Report.unsubscribes }}{{ if gt $i 0 }}, {{end}}{{ $email }}{{ end }}
 
-
-==============================
+============================================================
 Per-campaign stats:
-==============================
-
-
-{{ range $i, $campaign := .Campaigns }}
-Name: {{ $campaign.Name }}
-Subject: {{ $campaign.Subject }}
-Sent: {{ $campaign.RunDate }}
-Detail: {{ $campaign.PermalinkUrl }}
-Word Count: {{ $campaign.WordCount }}
-Link Count: {{ $campaign.LinkCount }}
+============================================================
+{{ range $i, $campaign := .Campaigns }}------------------------------------------------------------
+{{ $campaign.Name }}
+------------------------------------------------------------
+    Subject: {{ $campaign.Subject }}
+    Sent: {{ $campaign.RunDate }}
+    Detail: {{ $campaign.PermalinkUrl }}
+    Word Count: {{ $campaign.WordCount }}
+    Link Count: {{ $campaign.LinkCount }}
 
     {{ $campaign.TrackingSummary.Sends }} emails sent
     {{ $campaign.TrackingSummary.Opens }} emails opened ({{ perc $campaign.TrackingSummary.Opens $campaign.TrackingSummary.Sends }}%)

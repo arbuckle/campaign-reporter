@@ -11,8 +11,8 @@ import (
 // Campaigns is the master type - a representation of multiple campaigns
 // and representations of aggregate stats for said campaigns.
 type Campaigns struct {
-	StartDate string
-	Meta      struct {
+	DaysBack int
+	Meta     struct {
 		Pagination struct {
 			Next string `json:"next_link"`
 		} `json:"pagination"`

@@ -18,6 +18,7 @@ var (
 
 	getTopDomains int
 	getTopClicks  int
+	daysBack      int
 
 	prevReport string
 
@@ -33,6 +34,7 @@ func init() {
 	flag.StringVar(&prevReport, "run.fromfile", "", "Generate report from stored file")
 	flag.BoolVar(&debug, "run.debug", false, "verbose output")
 	flag.IntVar(&getTopDomains, "run.domains", 0, "Number of email domains to display")
+	flag.IntVar(&daysBack, "run.daysback", 0, "Days back to look for data")
 	flag.IntVar(&getTopClicks, "run.links", 0, "Number of links to display ")
 }
 
@@ -85,5 +87,6 @@ func main() {
 	}
 	save(camps, saveTo)
 	camps.BuildCampaignReport()
+	fmt.Println(camps)
 	fmt.Println(render(camps))
 }
