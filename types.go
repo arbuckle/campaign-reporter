@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"strings"
 	"time"
 )
@@ -61,6 +62,9 @@ type Campaign struct {
 	RunDate      string `json:"last_run_date"`
 	PermalinkUrl string `json:"permalink_url"`
 
+	// Preview type
+	PreviewEmailContent string `json:"preview_email_content"`
+
 	// Complex types from JSON response
 	TrackingSummary campaignSummary   `json:"tracking_summary"`
 	Clickthroughs   ClickList         `json:"click_through_details"`
@@ -71,6 +75,12 @@ type Campaign struct {
 	Bounces          []string
 	Unsubscribes     []string
 	OrderedSummaries SummaryList
+	LinkCount        int
+	WordCount        int
+
+	// Measurements of user neuroses
+	TopOpener  string
+	TopClicker string
 }
 
 func (c *Campaign) RunDateAsTime() (time.Time, error) {
@@ -87,6 +97,11 @@ func (c *Campaign) BuildCampaignReport() error {
 	c.PivotedSummary = map[string]*campaignSummary{}
 
 	c.Tracking = deduplicateTracking(c.Tracking)
+
+	c.WordCount = getWordCount(c.PreviewEmailContent)
+	c.LinkCount = len(c.Clickthroughs)
+
+	log.Printf("Word Count: %d, Link Count: %d", c.WordCount, c.LinkCount)
 
 	// Tabluating bonces, unsubs, and per-domain summaries
 	c.Bounces = []string{}

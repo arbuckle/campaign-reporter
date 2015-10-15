@@ -75,6 +75,9 @@ func main() {
 		log.Print(err)
 		log.Print(c)
 
+		err = getCampaignPreview(c)
+		log.Print(err)
+
 		err = getCampaignTracking(c)
 
 		b, _ := json.MarshalIndent(c, "", "  ")

@@ -41,6 +41,8 @@ Name: {{ $campaign.Name }}
 Subject: {{ $campaign.Subject }}
 Sent: {{ $campaign.RunDate }}
 Detail: {{ $campaign.PermalinkUrl }}
+Word Count: {{ $campaign.WordCount }}
+Link Count: {{ $campaign.LinkCount }}
 
     {{ $campaign.TrackingSummary.Sends }} emails sent
     {{ $campaign.TrackingSummary.Opens }} emails opened ({{ perc $campaign.TrackingSummary.Opens $campaign.TrackingSummary.Sends }}%)

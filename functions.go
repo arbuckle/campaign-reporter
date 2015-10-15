@@ -7,7 +7,10 @@ import (
 	"log"
 	"os"
 	"sort"
+	"strings"
 	"text/template"
+
+	"golang.org/x/net/html"
 )
 
 // generates a template
@@ -189,4 +192,28 @@ func aggTopClicks(numClicks int, c ClickList) ClickList {
 		break
 	}
 	return newClicks
+}
+
+// Parses an HTML document and returns a word count
+// Returns 0 on any error.
+// This is straight out of the golang html.Parse example
+func getWordCount(s string) int {
+	words := 0
+
+	doc, err := html.Parse(strings.NewReader(s))
+	if err != nil {
+		log.Fatal(err)
+	}
+	var f func(*html.Node)
+	f = func(n *html.Node) {
+		if n.Type == html.TextNode {
+			words += len(strings.Split(n.Data, " "))
+		}
+		for c := n.FirstChild; c != nil; c = c.NextSibling {
+			f(c)
+		}
+	}
+	f(doc)
+
+	return words
 }

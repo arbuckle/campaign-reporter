@@ -65,6 +65,11 @@ func getCampaignDetail(c *Campaign) error {
 
 }
 
+func getCampaignPreview(c *Campaign) error {
+	url := fmt.Sprintf("https://api.constantcontact.com/v2/emailmarketing/campaigns/%s/preview?api_key=%s", c.ID, apiKey)
+	return getURLAndDecodeInto(url, c)
+}
+
 // Pull tracking info for Sends, Opens, Clicks, Bounces, and Unsubs
 func getCampaignTracking(c *Campaign) error {
 	c.Tracking = []*trackingAction{}
