@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"net/http"
 	"time"
@@ -23,7 +24,7 @@ type apiTracking struct {
 }
 
 func getURLAndDecodeInto(url string, i interface{}) error {
-	log.Print("opening ", url)
+	log.Printf("opening %s", url)
 
 	client := &http.Client{}
 
@@ -36,12 +37,15 @@ func getURLAndDecodeInto(url string, i interface{}) error {
 	}
 	defer resp.Body.Close()
 
-	//b, _ := ioutil.ReadAll(resp.Body)
-	//fmt.Println(string(b))
-	//err = json.Unmarshal(b, &i)
-
-	err = json.NewDecoder(resp.Body).Decode(&i)
-	return err
+	if debug {
+		b, _ := ioutil.ReadAll(resp.Body)
+		log.Print(string(b))
+		err = json.Unmarshal(b, &i)
+	} else {
+		err = json.NewDecoder(resp.Body).Decode(&i)
+		return err
+	}
+	return nil
 }
 
 // Retrieve all campaigns for the last 7 days
@@ -82,12 +86,12 @@ func getCampaignTracking(c *Campaign) error {
 				break
 			}
 			err := getURLAndDecodeInto(url, trackingResp)
-			fmt.Println(err)
+			log.Print(err)
 			if err != nil {
 				return err
 			}
 			for _, result := range trackingResp.Results {
-				log.Print("Appending result ", result)
+				log.Printf("Appending result %s", result)
 				c.Tracking = append(c.Tracking, result)
 			}
 			oldUrl = url

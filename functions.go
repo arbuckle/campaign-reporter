@@ -1,9 +1,63 @@
 package main
 
 import (
-	"fmt"
+	"bytes"
+	"encoding/gob"
+	"io/ioutil"
+	"log"
+	"os"
 	"sort"
+	"text/template"
 )
+
+// generates a template
+func render(c Campaigns) string {
+	funcs := template.FuncMap{"perc": func(a, b int) int {
+		if a == 0 {
+			return 0
+		}
+		return int((float64(a) / float64(b)) * 100)
+	}}
+
+	t, _ := template.New("email").Funcs(funcs).ParseFiles("email.template")
+	log.Print(t)
+
+	b := bytes.NewBuffer([]byte{})
+	t.ExecuteTemplate(b, "email", c)
+	return b.String()
+}
+
+// gob-encodes the input and saves to filename, killing the program if an error is
+// encountered
+func save(c Campaigns, filename string) {
+	var b bytes.Buffer
+	enc := gob.NewEncoder(&b)
+	err := enc.Encode(c)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	err = ioutil.WriteFile(filename, b.Bytes(), 0644)
+	if err != nil {
+		log.Fatal(err)
+	}
+}
+
+// loads a gob-encoded input from file.
+func load(filename string) Campaigns {
+	b, err := os.Open(filename)
+	if err != nil {
+		log.Fatal(err)
+	}
+	dec := gob.NewDecoder(b)
+
+	out := Campaigns{}
+	err = dec.Decode(&out)
+	if err != nil {
+		log.Fatal(err)
+	}
+	return out
+}
 
 func combineStats(c []*Campaign) *campaignSummary {
 	out := &campaignSummary{}
@@ -112,7 +166,7 @@ func aggTopDomains(numDomains int, pivotedSummary map[string]*campaignSummary) S
 	for i, s := range orderedSummaries {
 		if i <= numDomains {
 			newOs = append(newOs, s)
-			fmt.Println("top domain: ", s)
+			log.Print("top domain: ", s)
 		} else {
 			otherSummaries.Add(s)
 		}
@@ -128,7 +182,7 @@ func aggTopClicks(numClicks int, c ClickList) ClickList {
 	sort.Sort(c)
 	for i, click := range c {
 		if i <= numClicks {
-			fmt.Println("top click: ", click)
+			log.Print("top click: ", click)
 			newClicks = append(newClicks, click)
 			continue
 		}

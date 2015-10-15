@@ -99,17 +99,10 @@ func (c *Campaign) BuildCampaignReport() error {
 			}
 		}
 
-		if domain == "cable.comcast.com" {
-			fmt.Println(c.PivotedSummary[domain])
-		}
-
 		switch action.ActivityType {
 		case "EMAIL_SEND":
 			c.PivotedSummary[domain].Sends++
 		case "EMAIL_OPEN":
-			if domain == "cable.comcast.com" {
-				fmt.Println(action)
-			}
 			c.PivotedSummary[domain].Opens++
 		case "EMAIL_CLICK":
 			c.PivotedSummary[domain].Clicks++
