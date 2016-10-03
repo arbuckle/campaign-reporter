@@ -55,7 +55,7 @@ func main() {
 	}
 	conf.ParseAll()
 
-	api.InitAPI(config, authToken, apiKey, daysBack, debug)
+	ccAPI, _ := api.NewAPI(config, authToken, apiKey, daysBack, debug)
 
 	// Generate a report from a stored file
 	if prevReport != "" {
@@ -70,7 +70,7 @@ func main() {
 
 	log.Print(runTime, saveTo)
 
-	camps, err := api.GetCampaigns()
+	camps, err := ccAPI.GetCampaigns()
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -78,14 +78,14 @@ func main() {
 	log.Print("retrieved campaigns: ", len(camps.Campaigns))
 
 	for _, c := range camps.Campaigns {
-		err = api.GetCampaignDetail(c)
+		err = ccAPI.GetCampaignDetail(c)
 		log.Print(err)
 		log.Print(c)
 
-		err = api.GetCampaignPreview(c)
+		err = ccAPI.GetCampaignPreview(c)
 		log.Print(err)
 
-		err = api.GetCampaignTracking(c)
+		err = ccAPI.GetCampaignTracking(c)
 
 		b, _ := json.MarshalIndent(c, "", "  ")
 		fmt.Println(string(b))
