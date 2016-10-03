@@ -48,6 +48,25 @@ func getURLAndDecodeInto(url string, i interface{}) error {
 	return nil
 }
 
+type List struct {
+	Id           int    `json:"id"`
+	CreatedDate  string `json:"created_date"`
+	ModifiedDate string `json:"modified_date"`
+
+	ContactCount int    `json:"contact_count"`
+	Name         string `json:"name"`
+	Status       string `json:"status"`
+}
+
+func getLists() ([]*List, error) {
+	now := time.Now().Add(-time.Duration(daysBack*24) * time.Hour).Format(time.RFC3339)
+	url := fmt.Sprintf("https://api.constantcontact.com/v2/lists?api_key=%s&modified_since=%s", apiKey, now)
+
+	l := []*List{}
+	err := getURLAndDecodeInto(url, l)
+	return l, err
+}
+
 // Retrieve all campaigns for the last 7 days
 func getCampaigns() (Campaigns, error) {
 	now := time.Now().Add(-time.Duration(daysBack*24) * time.Hour).Format(time.RFC3339)
