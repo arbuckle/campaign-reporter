@@ -174,7 +174,9 @@ func aggTopDomains(numDomains int, pivotedSummary map[string]*campaignSummary) S
 			otherSummaries.Add(s)
 		}
 	}
-	newOs[numDomains] = otherSummaries
+	if len(newOs) > 0 {
+		newOs[len(newOs)-1] = otherSummaries
+	}
 	return newOs
 }
 
