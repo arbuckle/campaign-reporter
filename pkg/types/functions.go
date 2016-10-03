@@ -1,4 +1,4 @@
-package main
+package types
 
 import (
 	"bytes"
@@ -14,7 +14,7 @@ import (
 )
 
 // generates a template
-func render(c Campaigns) string {
+func Render(c Campaigns) string {
 	funcs := template.FuncMap{"perc": func(a, b int) int {
 		if a == 0 {
 			return 0
@@ -32,7 +32,7 @@ func render(c Campaigns) string {
 
 // gob-encodes the input and saves to filename, killing the program if an error is
 // encountered
-func save(c Campaigns, filename string) {
+func Save(c Campaigns, filename string) {
 	var b bytes.Buffer
 	enc := gob.NewEncoder(&b)
 	err := enc.Encode(c)
@@ -47,7 +47,7 @@ func save(c Campaigns, filename string) {
 }
 
 // loads a gob-encoded input from file.
-func load(filename string) Campaigns {
+func Load(filename string) Campaigns {
 	b, err := os.Open(filename)
 	if err != nil {
 		log.Fatal(err)
@@ -70,7 +70,7 @@ func combineStats(c []*Campaign) *campaignSummary {
 	return out
 }
 
-func combineSummaries(c []*Campaign) SummaryList {
+func combineSummaries(getTopDomains int, c []*Campaign) SummaryList {
 	pivoted := map[string]*campaignSummary{}
 	for _, campaign := range c {
 		for _, s := range campaign.PivotedSummary {
@@ -128,8 +128,8 @@ func combineBounces(c []*Campaign) []string {
 	return out
 }
 
-func deduplicateTracking(t []*trackingAction) []*trackingAction {
-	out := []*trackingAction{}
+func deduplicateTracking(t []*TrackingAction) []*TrackingAction {
+	out := []*TrackingAction{}
 	seen := map[string]map[string]bool{}
 	for _, action := range t {
 		activity := action.ActivityType

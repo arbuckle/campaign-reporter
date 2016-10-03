@@ -1,4 +1,4 @@
-package main
+package api
 
 import (
 	"encoding/json"
@@ -7,7 +7,28 @@ import (
 	"log"
 	"net/http"
 	"time"
+
+	"github.com/arbuckle/campaign-reporter/pkg/types"
 )
+
+var (
+	config    string
+	authToken string
+	apiKey    string
+
+	daysBack int
+
+	debug bool
+)
+
+// gross
+func InitAPI(cfg, token, key string, db int, d bool) {
+	config = cfg
+	authToken = token
+	apiKey = key
+	daysBack = db
+	debug = d
+}
 
 type apiPagination struct {
 	Prev string `json:"prev_link,omitempty"`
@@ -19,8 +40,8 @@ type apiMeta struct {
 }
 
 type apiTracking struct {
-	Meta    apiMeta           `json:"meta"`
-	Results []*trackingAction `json:"results"`
+	Meta    apiMeta                 `json:"meta"`
+	Results []*types.TrackingAction `json:"results"`
 }
 
 func getURLAndDecodeInto(url string, i interface{}) error {
@@ -58,7 +79,7 @@ type List struct {
 	Status       string `json:"status"`
 }
 
-func getLists() ([]*List, error) {
+func GetLists() ([]*List, error) {
 	now := time.Now().Add(-time.Duration(daysBack*24) * time.Hour).Format(time.RFC3339)
 	url := fmt.Sprintf("https://api.constantcontact.com/v2/lists?api_key=%s&modified_since=%s", apiKey, now)
 
@@ -68,11 +89,11 @@ func getLists() ([]*List, error) {
 }
 
 // Retrieve all campaigns for the last 7 days
-func getCampaigns() (Campaigns, error) {
+func GetCampaigns() (types.Campaigns, error) {
 	now := time.Now().Add(-time.Duration(daysBack*24) * time.Hour).Format(time.RFC3339)
 	url := fmt.Sprintf("https://api.constantcontact.com/v2/emailmarketing/campaigns?status=ALL&api_key=%s&modified_since=%s", apiKey, now)
 
-	c := &Campaigns{
+	c := &types.Campaigns{
 		DaysBack: daysBack,
 	}
 	err := getURLAndDecodeInto(url, c)
@@ -80,20 +101,20 @@ func getCampaigns() (Campaigns, error) {
 }
 
 // Gets extended metadata for a single campaign
-func getCampaignDetail(c *Campaign) error {
+func GetCampaignDetail(c *types.Campaign) error {
 	url := fmt.Sprintf("https://api.constantcontact.com/v2/emailmarketing/campaigns/%s?api_key=%s", c.ID, apiKey)
 	return getURLAndDecodeInto(url, c)
 
 }
 
-func getCampaignPreview(c *Campaign) error {
+func GetCampaignPreview(c *types.Campaign) error {
 	url := fmt.Sprintf("https://api.constantcontact.com/v2/emailmarketing/campaigns/%s/preview?api_key=%s", c.ID, apiKey)
 	return getURLAndDecodeInto(url, c)
 }
 
 // Pull tracking info for Sends, Opens, Clicks, Bounces, and Unsubs
-func getCampaignTracking(c *Campaign) error {
-	c.Tracking = []*trackingAction{}
+func GetCampaignTracking(c *types.Campaign) error {
+	c.Tracking = []*types.TrackingAction{}
 	for _, t := range []string{"sends", "opens", "clicks", "bounces", "unsubscribes"} {
 		url := fmt.Sprintf("/v2/emailmarketing/campaigns/%s/tracking/%s?api_key=%s", c.ID, t, apiKey)
 		trackingResp := &apiTracking{

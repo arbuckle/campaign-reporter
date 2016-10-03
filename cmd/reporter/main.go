@@ -9,6 +9,9 @@ import (
 	"time"
 
 	"github.com/rakyll/globalconf"
+
+	"github.com/arbuckle/campaign-reporter/pkg/api"
+	"github.com/arbuckle/campaign-reporter/pkg/types"
 )
 
 var (
@@ -52,11 +55,13 @@ func main() {
 	}
 	conf.ParseAll()
 
+	api.InitAPI(config, authToken, apiKey, daysBack, debug)
+
 	// Generate a report from a stored file
 	if prevReport != "" {
-		c := load(prevReport)
-		c.BuildCampaignReport()
-		fmt.Println(render(c))
+		c := types.Load(prevReport)
+		c.BuildCampaignReport(getTopDomains, getTopClicks)
+		fmt.Println(types.Render(c))
 		os.Exit(0)
 	}
 
@@ -65,7 +70,7 @@ func main() {
 
 	log.Print(runTime, saveTo)
 
-	camps, err := getCampaigns()
+	camps, err := api.GetCampaigns()
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -73,20 +78,20 @@ func main() {
 	log.Print("retrieved campaigns: ", len(camps.Campaigns))
 
 	for _, c := range camps.Campaigns {
-		err = getCampaignDetail(c)
+		err = api.GetCampaignDetail(c)
 		log.Print(err)
 		log.Print(c)
 
-		err = getCampaignPreview(c)
+		err = api.GetCampaignPreview(c)
 		log.Print(err)
 
-		err = getCampaignTracking(c)
+		err = api.GetCampaignTracking(c)
 
 		b, _ := json.MarshalIndent(c, "", "  ")
 		fmt.Println(string(b))
 	}
-	save(camps, saveTo)
-	camps.BuildCampaignReport()
+	types.Save(camps, saveTo)
+	camps.BuildCampaignReport(getTopDomains, getTopClicks)
 	fmt.Println(camps)
-	fmt.Println(render(camps))
+	fmt.Println(types.Render(camps))
 }

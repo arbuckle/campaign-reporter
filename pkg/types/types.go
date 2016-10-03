@@ -1,4 +1,4 @@
-package main
+package types
 
 import (
 	"fmt"
@@ -23,16 +23,16 @@ type Campaigns struct {
 
 // Generates campaign report data for all of the child campaigns, then
 // creates the master report data for the complete campaign window.
-func (c *Campaigns) BuildCampaignReport() error {
+func (c *Campaigns) BuildCampaignReport(domains, clicks int) error {
 	if len(c.Campaigns) == 0 {
 		return fmt.Errorf("No campaigns to report on")
 	}
 
 	for _, campaign := range c.Campaigns {
-		_ = campaign.BuildCampaignReport()
+		_ = campaign.BuildCampaignReport(domains, clicks)
 	}
 
-	return c.buildMegaReport()
+	return c.buildMegaReport(domains, clicks)
 }
 
 // send counts by domain (i.e. clicks by company)
@@ -40,10 +40,10 @@ func (c *Campaigns) BuildCampaignReport() error {
 // top link clicks
 // unsubscribe list (farewell~)
 // bounce list (ignoring suspended bounce reasons)
-func (c *Campaigns) buildMegaReport() error {
+func (c *Campaigns) buildMegaReport(domains, clicks int) error {
 	report := map[string]interface{}{}
 	report["combined"] = combineStats(c.Campaigns)
-	report["summaries"] = combineSummaries(c.Campaigns)
+	report["summaries"] = combineSummaries(domains, c.Campaigns)
 	report["clicks"] = combineClicks(c.Campaigns)
 	report["unsubscribes"] = combineUnsubscribes(c.Campaigns)
 	report["bounces"] = combineBounces(c.Campaigns)
@@ -68,7 +68,7 @@ type Campaign struct {
 	// Complex types from JSON response
 	TrackingSummary campaignSummary   `json:"tracking_summary"`
 	Clickthroughs   ClickList         `json:"click_through_details"`
-	Tracking        []*trackingAction `json:",omitempty"`
+	Tracking        []*TrackingAction `json:",omitempty"`
 
 	// Generated aggregates
 	PivotedSummary   map[string]*campaignSummary
@@ -93,7 +93,7 @@ func (c *Campaign) RunDateAsTime() (time.Time, error) {
 // - DONE a sent->opened->clicked funnel grouped by top 5 email address domains
 // - DONE a list of unsubscribe email/uid
 // - DONE a list of bounces
-func (c *Campaign) BuildCampaignReport() error {
+func (c *Campaign) BuildCampaignReport(getTopDomains, getTopClicks int) error {
 	c.PivotedSummary = map[string]*campaignSummary{}
 
 	c.Tracking = deduplicateTracking(c.Tracking)
@@ -142,7 +142,7 @@ func (c *Campaign) BuildCampaignReport() error {
 ////////////////////////////////////////////////////////////////////////////////
 // TrackingAction represents a click, open, send, etc to a user.
 // actions are not necessarily unique per user per email.
-type trackingAction struct {
+type TrackingAction struct {
 	// Common
 	ActivityType string `json:"activity_type"`
 	ContactID    string `json:"contact_id"`
@@ -170,7 +170,7 @@ type trackingAction struct {
 	BounceDate string `json:"bounce_date"`
 }
 
-func (t *trackingAction) getEmailDomain() string {
+func (t *TrackingAction) getEmailDomain() string {
 	return strings.Split(t.Email, "@")[1]
 }
 
